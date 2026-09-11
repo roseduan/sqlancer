@@ -83,6 +83,37 @@ phase; 0 crashes / 0 AssertionErrors; `gp_distribution_policy` shows p and r
 policies; `relam` shows ao/pax tables — i.e. it genuinely exercises MPP + columnar.
 A smoke script is provided; no unit tests (needs a live cluster, as with Citus).
 
+## Declarative partitioning (added 2026-08-27)
+`PostgresTableGenerator.generatePartitionBy()` (inherited, unmodified) already emits
+`PARTITION BY {RANGE,LIST,HASH}(...)` for some tables for free -- it was this exact
+shape (a partitioned table with **zero leaf partitions**) that produced the
+`mj_part` case reproducing the "unexpected gang size" ORCA crash. Two gaps found
+while wiring this up properly:
+- Every such table was permanently unqueryable with real rows: with no leaf
+  partitions, `INSERT` always fails (`"no partition of relation ... found for
+  row"`, already an expected error via the inherited `PostgresInsertGenerator`).
+  `CloudberryProvider.generateDatabase()` now calls `createLeafPartitions()` for
+  any table `pg_partitioned_table` reports a strategy for: HASH gets 2-4
+  MODULUS/REMAINDER partitions (type-agnostic, always valid); RANGE/LIST get a
+  single catch-all `DEFAULT` partition (also type-agnostic -- no boundary-literal
+  generator needed). A low-probability branch still leaves some tables leafless,
+  to keep exercising the original crashing shape.
+- `redistributeTable()` was being called on partitioned tables and their leaf
+  partitions unconditionally. Verified on the live cluster: `SET DISTRIBUTED
+  BY/RANDOMLY` on a partitioned root works, but `REPLICATED` fails
+  (`"can't set the distribution policy of a partition table to REPLICATED"`),
+  and *any* `SET DISTRIBUTED` on a leaf partition fails (`"can't set the
+  distribution policy of \"<partition>\" ... can only be the same as its
+  parent's"`) -- a partition's policy always follows its root. `generateDatabase()`
+  now detects partitioned tables via `pg_partitioned_table.partstrat` and skips
+  `redistributeTable()` for them entirely; both error strings were also added to
+  `CloudberryCommon` as a defense-in-depth safety net.
+
+Still out of scope: typed RANGE/LIST boundary-literal generation (multiple,
+non-overlapping, non-DEFAULT leaf partitions per type), sub-partitioning, legacy
+GPDB `PARTITION BY ... (START ... END ...)` syntax (Cloudberry's declarative
+partitioning is the standard PG subsystem, not the legacy GPDB one).
+
 ## Out of scope (v2+)
-GP partitioning (RANGE/LIST), AO/PAX WITH-options (compression/encoding/blocksize),
-resource groups, gp-specific SET GUCs, PQS oracle.
+AO/PAX WITH-options (compression/encoding/blocksize), resource groups,
+gp-specific SET GUCs, PQS oracle.

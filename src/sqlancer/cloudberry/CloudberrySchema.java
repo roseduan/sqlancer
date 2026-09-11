@@ -12,11 +12,11 @@ import sqlancer.SQLConnection;
 import sqlancer.postgres.PostgresSchema;
 
 /**
- * A {@link PostgresSchema} that additionally records, per table, the Cloudberry distribution policy type
- * ({@code 'p'} = hash-distributed, {@code 'r'} = replicated, {@code null} = randomly distributed / no policy) and the
- * table access method ({@code heap}, {@code ao_row}, {@code ao_column}, {@code pax}). The metadata is informational —
- * the reused PostgreSQL oracles do not depend on it — so schema reading falls back gracefully to plain PostgreSQL
- * tables if the Cloudberry catalogs are unavailable.
+ * A {@link PostgresSchema} that additionally records, per table, the Cloudberry distribution policy type ({@code 'p'} =
+ * hash-distributed, {@code 'r'} = replicated, {@code null} = randomly distributed / no policy) and the table access
+ * method ({@code heap}, {@code ao_row}, {@code ao_column}, {@code pax}). The metadata is informational — the reused
+ * PostgreSQL oracles do not depend on it — so schema reading falls back gracefully to plain PostgreSQL tables if the
+ * Cloudberry catalogs are unavailable.
  */
 public class CloudberrySchema extends PostgresSchema {
 

@@ -7,8 +7,12 @@ import java.util.Optional;
 
 import sqlancer.OracleFactory;
 import sqlancer.cloudberry.gen.CloudberryCommon;
+import sqlancer.cloudberry.oracle.CloudberryCERTOracle;
 import sqlancer.cloudberry.oracle.CloudberryOptimizerOracle;
+import sqlancer.cloudberry.oracle.CloudberryPivotedQuerySynthesisOracle;
 import sqlancer.cloudberry.oracle.tlp.CloudberryTLPAggregateOracle;
+import sqlancer.cloudberry.oracle.tlp.CloudberryTLPDistinctOracle;
+import sqlancer.cloudberry.oracle.tlp.CloudberryTLPGroupByOracle;
 import sqlancer.cloudberry.oracle.tlp.CloudberryTLPHavingOracle;
 import sqlancer.common.oracle.CERTOracle;
 import sqlancer.common.oracle.CompositeTestOracle;
@@ -20,6 +24,7 @@ import sqlancer.common.query.SQLancerResultSet;
 import sqlancer.postgres.PostgresGlobalState;
 import sqlancer.postgres.gen.PostgresCommon;
 import sqlancer.postgres.gen.PostgresExpressionGenerator;
+import sqlancer.postgres.oracle.PostgresFuzzer;
 
 public enum CloudberryOracleFactory implements OracleFactory<PostgresGlobalState> {
     NOREC {
@@ -31,6 +36,17 @@ public enum CloudberryOracleFactory implements OracleFactory<PostgresGlobalState
                     .withRegex(PostgresCommon.getCommonExpressionRegexErrors())
                     .with(CloudberryCommon.getCloudberryErrors()).build();
             return new NoRECOracle<>(globalState, gen, errors);
+        }
+    },
+    PQS {
+        @Override
+        public TestOracle<PostgresGlobalState> create(PostgresGlobalState globalState) throws SQLException {
+            return new CloudberryPivotedQuerySynthesisOracle(globalState);
+        }
+
+        @Override
+        public boolean requiresAllTablesToContainRows() {
+            return true;
         }
     },
     WHERE {
@@ -50,6 +66,18 @@ public enum CloudberryOracleFactory implements OracleFactory<PostgresGlobalState
             return new CloudberryTLPHavingOracle(globalState);
         }
     },
+    DISTINCT {
+        @Override
+        public TestOracle<PostgresGlobalState> create(PostgresGlobalState globalState) throws SQLException {
+            return new CloudberryTLPDistinctOracle(globalState);
+        }
+    },
+    GROUP_BY {
+        @Override
+        public TestOracle<PostgresGlobalState> create(PostgresGlobalState globalState) throws SQLException {
+            return new CloudberryTLPGroupByOracle(globalState);
+        }
+    },
     QUERY_PARTITIONING {
         @Override
         public TestOracle<PostgresGlobalState> create(PostgresGlobalState globalState) throws Exception {
@@ -57,6 +85,8 @@ public enum CloudberryOracleFactory implements OracleFactory<PostgresGlobalState
             oracles.add(WHERE.create(globalState));
             oracles.add(HAVING.create(globalState));
             oracles.add(new CloudberryTLPAggregateOracle(globalState));
+            oracles.add(DISTINCT.create(globalState));
+            oracles.add(GROUP_BY.create(globalState));
             return new CompositeTestOracle<PostgresGlobalState>(oracles, globalState);
         }
     },
@@ -104,12 +134,23 @@ public enum CloudberryOracleFactory implements OracleFactory<PostgresGlobalState
                 String plan = planPart[planPart.length - 1];
                 return Optional.of(plan.split("  ")[0].trim());
             };
-            return new CERTOracle<>(globalState, gen, errors, rowCountParser, queryPlanParser);
+            return new CloudberryCERTOracle(globalState,
+                    new CERTOracle<>(globalState, gen, errors, rowCountParser, queryPlanParser));
         }
 
         @Override
         public boolean requiresAllTablesToContainRows() {
             return true;
+        }
+    },
+    // The crudest oracle: generate a random query and only check that it doesn't crash the harness, no correctness
+    // comparison. No Cloudberry-specific wiring is needed: PostgresFuzzer issues its statement with no ExpectedErrors
+    // at all, so every SQLException (Cloudberry-specific or not) already takes the same "abort this check, not a bug"
+    // path regardless of DBMS.
+    FUZZER {
+        @Override
+        public TestOracle<PostgresGlobalState> create(PostgresGlobalState globalState) throws Exception {
+            return new PostgresFuzzer(globalState);
         }
     };
 

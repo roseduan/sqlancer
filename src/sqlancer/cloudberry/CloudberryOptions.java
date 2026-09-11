@@ -14,9 +14,9 @@ public class CloudberryOptions extends PostgresOptions {
 
     /**
      * Honor the {@code --test-tablespaces} flag directly instead of OR-ing it with the OS default. The upstream
-     * PostgresOptions returns {@code testTablespaces || osDefault}, which makes {@code --test-tablespaces false} a no-op
-     * on Linux and floods the state-generation phase with CREATE TABLESPACE statements. On an MPP cluster tablespaces
-     * also need per-segment directories, so testing them is disabled by default for Cloudberry.
+     * PostgresOptions returns {@code testTablespaces || osDefault}, which makes {@code --test-tablespaces false} a
+     * no-op on Linux and floods the state-generation phase with CREATE TABLESPACE statements. On an MPP cluster
+     * tablespaces also need per-segment directories, so testing them is disabled by default for Cloudberry.
      */
     @Override
     public boolean isTestTablespaces() {
