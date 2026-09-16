@@ -108,15 +108,16 @@ public final class CloudberryCommon {
             errors.add("bogus index qualification");
         }
 
+        // Only the precise, unambiguous assertion signature is suppressed here -- NOT its generic connection-loss
+        // fallout ("connection has been closed", "I/O error...", "recovery mode", etc.). Those messages are left
+        // unfiltered on purpose (decision reversed 2026-09-16): a generic connection-loss error could be fallout
+        // from this exact bug, but it could just as easily be a different, not-yet-diagnosed crash, and blanket-
+        // suppressing it risks hiding a new bug behind a known one. This string, by contrast, is a fingerprint
+        // that can only ever be this one bug, so it's safe to suppress with full confidence. A fix already has an
+        // MR open against Cloudberry; once merged and this environment is rebuilt against it, flip the flag below
+        // to false and this line becomes dead code to delete.
         if (CloudberryBugs.bugOrSelectivityNotClampedAssert) {
             errors.add("pselec >= 0.0 && pselec <= 1.0");
-            // Fallout from the coordinator-wide restart that assert failure triggers: every other
-            // concurrently-running thread's connection briefly surfaces one of these too.
-            errors.add("the database system is resetting");
-            errors.add("the database system is starting up");
-            errors.add("the database system is in recovery mode");
-            errors.add("This connection has been closed");
-            errors.add("An I/O error occurred while sending to the backend");
         }
 
         // Exclusion constraints and foreign keys on distributed tables.

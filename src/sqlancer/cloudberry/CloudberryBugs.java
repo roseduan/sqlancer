@@ -42,6 +42,20 @@ public final class CloudberryBugs {
     // kills the whole backend process and forces a coordinator-wide restart -- every other
     // concurrently-running thread's connection briefly fails too (self-recovers within a few seconds,
     // no manual action needed).
+    //
+    // Minimal repro (needs ANALYZE; assert-build only):
+    // CREATE TABLE m1(c0 inet); CREATE TABLE m2(c0 inet);
+    // INSERT INTO m2 VALUES ('88.147.138.141'), ('76.163.212.11'), ('214.10.65.144');
+    // ANALYZE m1, m2;
+    // SELECT COUNT(*) FROM ONLY m1 LEFT OUTER JOIN m2 ON true
+    // WHERE (m1.c0 IS NOT NULL) OR (m2.c0 BETWEEN SYMMETRIC '75.175.243.19' AND '230.9.216.68');
+    //
+    // A fix already has an MR open against Cloudberry (as of 2026-09-16). Until it merges and this
+    // environment is rebuilt against it, CloudberryCommon suppresses only the exact assertion
+    // signature above ("pselec >= 0.0 && pselec <= 1.0") -- an unambiguous fingerprint of this one
+    // bug -- and deliberately leaves the bug's generic connection-loss fallout ("connection has been
+    // closed", "I/O error...", "recovery mode", etc.) unfiltered, since that wording could just as
+    // easily be a different, not-yet-diagnosed crash. Flip this flag to false once the fix lands.
     public static boolean bugOrSelectivityNotClampedAssert = true;
 
     private CloudberryBugs() {
